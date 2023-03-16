@@ -98,23 +98,25 @@
                      hook-cfg (:hooks config)]
                  (when hook-cfg
                    (if-let [x (get-in hook-cfg [:analyze-call sym])]
-                     ;; we return a function of ctx, so we will never memoize on
-                     ;; ctx, which will hold on to all the linting state and
-                     ;; creates memory leaks for long lives processes (LSP /
-                     ;; VSCode), see #1036
-                     (sci/binding [sci/out *out*
-                                   sci/err *err*]
-                       (let [code (if (string? x)
-                                    (when (:allow-string-hooks ctx)
-                                      x)
-                                    ;; x is a function symbol
-                                    (let [ns (namespace x)]
-                                      (format "(require '%s %s)\n%s" ns
-                                              (if api/*reload* :reload "")
-                                              x)))]
-                         (binding [*ctx* ctx]
-                           ;; require isn't thread safe in SCI
-                           (locking load-lock (sci/eval-string* sci-ctx code)))))
+                     (if (fn? x)
+                       x
+                       ;; we return a function of ctx, so we will never memoize on
+                       ;; ctx, which will hold on to all the linting state and
+                       ;; creates memory leaks for long lives processes (LSP /
+                       ;; VSCode), see #1036
+                       (sci/binding [sci/out *out*
+                                     sci/err *err*]
+                         (let [code (if (string? x)
+                                      (when (:allow-string-hooks ctx)
+                                        x)
+                                      ;; x is a function symbol
+                                      (let [ns (namespace x)]
+                                        (format "(require '%s %s)\n%s" ns
+                                                (if api/*reload* :reload "")
+                                                x)))]
+                           (binding [*ctx* ctx]
+                             ;; require isn't thread safe in SCI
+                             (locking load-lock (sci/eval-string* sci-ctx code))))))
                      (when-let [x (get-in hook-cfg [:macroexpand sym])]
                        (sci/binding [sci/out *out*
                                      sci/err *err*]
